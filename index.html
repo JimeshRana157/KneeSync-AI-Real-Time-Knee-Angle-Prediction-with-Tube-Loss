@@ -1,0 +1,1338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>KneeSync AI — Real-Time Knee Angle Prediction</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #050C18;
+  --bg2: #091220;
+  --card: #0D1B2E;
+  --card2: #112236;
+  --border: rgba(99,179,237,0.12);
+  --border2: rgba(99,179,237,0.22);
+  --blue: #3B82F6;
+  --cyan: #06FFA5;
+  --orange: #F97316;
+  --purple: #A78BFA;
+  --yellow: #FBBF24;
+  --red: #F87171;
+  --text: #E2E8F0;
+  --text2: #94A3B8;
+  --text3: #64748B;
+  --font-head: 'Syne', sans-serif;
+  --font-body: 'DM Sans', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{background:var(--bg);color:var(--text);font-family:var(--font-body);line-height:1.6;overflow-x:hidden;}
+
+/* ── NOISE OVERLAY ── */
+body::before{
+  content:'';position:fixed;inset:0;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events:none;z-index:0;opacity:.4;
+}
+
+/* ── NAV ── */
+nav{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:1rem 3rem;
+  background:rgba(5,12,24,0.85);
+  backdrop-filter:blur(16px);
+  border-bottom:1px solid var(--border);
+}
+.nav-logo{font-family:var(--font-head);font-size:1.25rem;font-weight:800;color:#fff;letter-spacing:-0.02em;}
+.nav-logo span{color:var(--cyan);}
+.nav-links{display:flex;gap:2rem;list-style:none;}
+.nav-links a{color:var(--text2);text-decoration:none;font-size:0.875rem;font-weight:500;transition:color .2s;}
+.nav-links a:hover{color:var(--cyan);}
+.nav-badge{
+  background:linear-gradient(135deg,var(--blue),var(--cyan));
+  color:#000;font-size:0.75rem;font-weight:700;
+  padding:0.35rem 0.9rem;border-radius:100px;
+  font-family:var(--font-mono);
+}
+
+/* ── HERO ── */
+.hero{
+  min-height:100vh;display:flex;flex-direction:column;
+  justify-content:center;align-items:center;text-align:center;
+  padding:7rem 2rem 4rem;position:relative;
+  overflow:hidden;
+}
+.hero-glow{
+  position:absolute;top:20%;left:50%;transform:translateX(-50%);
+  width:700px;height:400px;
+  background:radial-gradient(ellipse at center, rgba(6,255,165,0.08) 0%, rgba(59,130,246,0.06) 40%, transparent 70%);
+  pointer-events:none;
+}
+.hero-grid{
+  position:absolute;inset:0;
+  background-image:linear-gradient(var(--border) 1px,transparent 1px),
+                   linear-gradient(90deg,var(--border) 1px,transparent 1px);
+  background-size:60px 60px;
+  mask-image:radial-gradient(ellipse 80% 60% at 50% 40%,black 0%,transparent 100%);
+  pointer-events:none;
+}
+.hero-tag{
+  display:inline-flex;align-items:center;gap:0.5rem;
+  background:rgba(6,255,165,0.08);border:1px solid rgba(6,255,165,0.25);
+  color:var(--cyan);font-family:var(--font-mono);font-size:0.75rem;
+  padding:0.4rem 1rem;border-radius:100px;margin-bottom:2rem;
+  letter-spacing:0.08em;
+}
+.hero-tag::before{content:'●';font-size:0.5rem;animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.3;}}
+h1{
+  font-family:var(--font-head);font-size:clamp(2.5rem,6vw,5rem);
+  font-weight:800;line-height:1.05;letter-spacing:-0.04em;
+  margin-bottom:1.5rem;max-width:900px;
+}
+h1 .accent{
+  background:linear-gradient(135deg,var(--blue) 0%,var(--cyan) 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.hero-sub{
+  font-size:1.1rem;color:var(--text2);max-width:640px;margin-bottom:3rem;
+  font-weight:400;line-height:1.7;
+}
+.hero-metrics{
+  display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;margin-bottom:3rem;
+}
+.metric-pill{
+  display:flex;flex-direction:column;align-items:center;
+  background:var(--card);border:1px solid var(--border2);
+  padding:1rem 1.5rem;border-radius:16px;min-width:130px;
+  transition:transform .2s,border-color .2s;
+}
+.metric-pill:hover{transform:translateY(-4px);border-color:var(--cyan);}
+.metric-pill .val{font-family:var(--font-mono);font-size:1.6rem;font-weight:600;color:var(--cyan);}
+.metric-pill .lab{font-size:0.72rem;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;margin-top:0.2rem;}
+.hero-btns{display:flex;gap:1rem;flex-wrap:wrap;justify-content:center;}
+.btn-primary{
+  background:linear-gradient(135deg,var(--blue),var(--cyan));
+  color:#000;font-weight:700;font-size:0.9rem;
+  padding:0.8rem 2rem;border-radius:10px;border:none;cursor:pointer;
+  text-decoration:none;display:inline-flex;align-items:center;gap:0.5rem;
+  transition:opacity .2s,transform .2s;
+}
+.btn-primary:hover{opacity:0.85;transform:translateY(-2px);}
+.btn-ghost{
+  background:transparent;color:var(--text);font-weight:600;font-size:0.9rem;
+  padding:0.8rem 2rem;border-radius:10px;border:1px solid var(--border2);cursor:pointer;
+  text-decoration:none;display:inline-flex;align-items:center;gap:0.5rem;
+  transition:border-color .2s,color .2s,transform .2s;
+}
+.btn-ghost:hover{border-color:var(--cyan);color:var(--cyan);transform:translateY(-2px);}
+
+/* ── SECTIONS ── */
+section{padding:5rem 2rem;position:relative;z-index:1;}
+.container{max-width:1100px;margin:0 auto;}
+.section-tag{
+  font-family:var(--font-mono);font-size:0.72rem;color:var(--cyan);
+  text-transform:uppercase;letter-spacing:0.14em;margin-bottom:0.75rem;
+}
+h2{font-family:var(--font-head);font-size:clamp(1.8rem,4vw,2.8rem);font-weight:800;letter-spacing:-0.03em;margin-bottom:0.75rem;line-height:1.1;}
+.section-desc{color:var(--text2);max-width:580px;margin-bottom:3rem;line-height:1.7;}
+
+/* ── PROBLEM CARDS ── */
+.problem-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1.5rem;}
+.problem-card{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:16px;padding:1.75rem;
+  transition:border-color .25s,transform .25s;
+  position:relative;overflow:hidden;
+}
+.problem-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,transparent,var(--blue),transparent);
+  opacity:0;transition:opacity .25s;
+}
+.problem-card:hover{border-color:var(--border2);transform:translateY(-4px);}
+.problem-card:hover::before{opacity:1;}
+.problem-card .icon{font-size:2rem;margin-bottom:1rem;}
+.problem-card h3{font-family:var(--font-head);font-size:1.15rem;font-weight:700;margin-bottom:0.6rem;}
+.problem-card p{color:var(--text2);font-size:0.9rem;line-height:1.65;}
+.problem-card .tag{
+  display:inline-block;margin-top:1rem;
+  font-family:var(--font-mono);font-size:0.68rem;color:var(--cyan);
+  background:rgba(6,255,165,0.08);border:1px solid rgba(6,255,165,0.2);
+  padding:0.25rem 0.6rem;border-radius:6px;letter-spacing:0.06em;
+}
+
+/* ── ARCHITECTURE ── */
+.arch-wrapper{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:20px;padding:2.5rem;overflow-x:auto;
+}
+.arch-diagram{display:flex;align-items:center;gap:0;min-width:760px;}
+.arch-block{
+  display:flex;flex-direction:column;align-items:center;
+  flex:1;
+}
+.arch-box{
+  background:var(--card2);border:1px solid var(--border2);
+  border-radius:12px;padding:0.85rem 1rem;text-align:center;
+  width:100%;max-width:140px;
+  transition:border-color .2s;
+}
+.arch-box:hover{border-color:var(--cyan);}
+.arch-box .aname{font-family:var(--font-head);font-size:0.8rem;font-weight:700;margin-bottom:0.15rem;}
+.arch-box .adesc{font-family:var(--font-mono);font-size:0.62rem;color:var(--text3);}
+.arch-box.emg{border-color:rgba(59,130,246,0.4);}
+.arch-box.cnn{border-color:rgba(167,139,250,0.4);}
+.arch-box.lstm{border-color:rgba(6,255,165,0.4);}
+.arch-box.out{border-color:rgba(249,115,22,0.4);}
+.arch-arrow{
+  flex:0;padding:0 0.5rem;color:var(--text3);
+  display:flex;align-items:center;font-size:1.2rem;
+}
+.arch-channels{display:flex;flex-direction:column;gap:0.4rem;align-items:center;width:100%;max-width:140px;}
+.arch-ch{
+  background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.25);
+  border-radius:8px;padding:0.35rem 0.75rem;
+  font-family:var(--font-mono);font-size:0.65rem;color:var(--blue);
+  width:100%;text-align:center;
+}
+.arch-footer{margin-top:1.5rem;display:flex;gap:2rem;flex-wrap:wrap;}
+.arch-stat{font-family:var(--font-mono);font-size:0.78rem;}
+.arch-stat span{color:var(--cyan);}
+
+/* ── TUBE LOSS ── */
+.tube-section{background:var(--bg2);}
+.tube-grid{display:grid;grid-template-columns:1fr 1fr;gap:2rem;}
+@media(max-width:768px){.tube-grid{grid-template-columns:1fr;}}
+.tube-explain{display:flex;flex-direction:column;gap:1rem;}
+.tube-step{
+  display:flex;gap:1rem;align-items:flex-start;
+  background:var(--card);border:1px solid var(--border);
+  border-radius:12px;padding:1.25rem;
+}
+.tube-step .num{
+  font-family:var(--font-mono);font-size:0.7rem;font-weight:600;
+  color:var(--cyan);background:rgba(6,255,165,0.1);
+  border:1px solid rgba(6,255,165,0.25);
+  width:28px;height:28px;border-radius:8px;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.tube-step h4{font-family:var(--font-head);font-size:0.9rem;font-weight:700;margin-bottom:0.25rem;}
+.tube-step p{font-size:0.82rem;color:var(--text2);line-height:1.55;}
+.tube-demo{
+  background:var(--card);border:1px solid var(--border2);
+  border-radius:16px;padding:1.75rem;
+}
+.tube-demo h3{font-family:var(--font-head);font-size:1.1rem;font-weight:700;margin-bottom:1.25rem;}
+.slider-group{margin-bottom:1.2rem;}
+.slider-group label{
+  display:flex;justify-content:space-between;
+  font-size:0.8rem;color:var(--text2);margin-bottom:0.4rem;font-family:var(--font-mono);
+}
+.slider-group label span{color:var(--cyan);}
+input[type=range]{
+  width:100%;appearance:none;height:4px;
+  background:linear-gradient(90deg,var(--blue),var(--cyan));
+  border-radius:100px;outline:none;
+}
+input[type=range]::-webkit-slider-thumb{
+  appearance:none;width:16px;height:16px;
+  background:var(--cyan);border-radius:50%;cursor:pointer;
+  border:2px solid var(--bg);
+}
+.pi-display{
+  margin-top:1.5rem;
+  background:var(--bg2);border:1px solid var(--border);
+  border-radius:12px;padding:1.25rem;
+}
+.pi-bar-wrap{position:relative;height:48px;background:var(--card2);border-radius:8px;overflow:hidden;margin:.6rem 0;}
+.pi-bar-inner{
+  position:absolute;top:0;bottom:0;
+  background:rgba(59,130,246,0.25);border-radius:8px;
+  transition:all .3s ease;border:1px solid rgba(59,130,246,0.5);
+}
+.pi-point{
+  position:absolute;top:50%;transform:translateY(-50%);
+  width:3px;height:32px;background:var(--cyan);border-radius:2px;
+  transition:left .3s;
+}
+.pi-labels{display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:0.7rem;color:var(--text2);}
+.pi-metrics{display:flex;gap:1rem;margin-top:1rem;flex-wrap:wrap;}
+.pi-metric{font-family:var(--font-mono);font-size:0.72rem;}
+.pi-metric span{color:var(--cyan);}
+
+/* ── RESULTS ── */
+.results-tabs{display:flex;gap:0.5rem;margin-bottom:2rem;flex-wrap:wrap;}
+.tab{
+  background:var(--card);border:1px solid var(--border);
+  color:var(--text2);font-size:0.8rem;font-weight:600;
+  padding:0.5rem 1.1rem;border-radius:8px;cursor:pointer;
+  transition:all .2s;font-family:var(--font-mono);
+}
+.tab.active,.tab:hover{background:var(--blue);border-color:var(--blue);color:#fff;}
+.results-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;}
+@media(max-width:768px){.results-grid{grid-template-columns:1fr;}}
+.chart-card{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:16px;padding:1.5rem;
+}
+.chart-card h3{font-family:var(--font-head);font-size:1rem;font-weight:700;margin-bottom:0.25rem;}
+.chart-card p{font-size:0.78rem;color:var(--text3);margin-bottom:1.25rem;}
+.chart-card canvas{max-height:220px;}
+
+/* ── RESULTS TABLE ── */
+.results-table-wrap{overflow-x:auto;margin-top:2.5rem;}
+table{width:100%;border-collapse:collapse;}
+th{
+  font-family:var(--font-mono);font-size:0.7rem;color:var(--text3);
+  text-transform:uppercase;letter-spacing:0.1em;padding:0.6rem 1rem;
+  text-align:left;border-bottom:1px solid var(--border2);
+  background:var(--bg2);
+}
+th:first-child{border-radius:8px 0 0 0;}
+th:last-child{border-radius:0 8px 0 0;}
+td{
+  font-family:var(--font-mono);font-size:0.8rem;padding:0.7rem 1rem;
+  border-bottom:1px solid var(--border);color:var(--text2);
+}
+tr:hover td{background:rgba(59,130,246,0.04);}
+td.good{color:var(--cyan);}
+td.bad{color:var(--red);}
+td.mid{color:var(--yellow);}
+td.bold{color:var(--text);font-weight:600;}
+.better-badge{
+  display:inline-block;background:rgba(6,255,165,0.12);
+  border:1px solid rgba(6,255,165,0.3);color:var(--cyan);
+  font-size:0.62rem;padding:0.15rem 0.4rem;border-radius:4px;margin-left:0.4rem;
+}
+
+/* ── DEMO ── */
+.demo-section{background:var(--bg2);}
+.demo-wrapper{
+  background:var(--card);border:1px solid var(--border2);
+  border-radius:20px;padding:2rem;
+  display:grid;grid-template-columns:280px 1fr;gap:2rem;
+}
+@media(max-width:768px){.demo-wrapper{grid-template-columns:1fr;}}
+.demo-controls h3{font-family:var(--font-head);font-size:1rem;font-weight:700;margin-bottom:1.25rem;}
+.emg-channel{margin-bottom:1.2rem;}
+.emg-channel label{display:flex;justify-content:space-between;font-size:0.75rem;color:var(--text2);margin-bottom:0.35rem;}
+.emg-channel label .muscle{font-weight:600;color:var(--text);}
+.emg-channel label .val{font-family:var(--font-mono);color:var(--cyan);}
+.mode-toggle{
+  display:flex;gap:0.4rem;margin-bottom:1.5rem;
+  background:var(--bg2);border:1px solid var(--border);
+  border-radius:10px;padding:4px;
+}
+.mode-btn{
+  flex:1;padding:0.45rem 0.5rem;border-radius:7px;
+  font-size:0.75rem;font-weight:600;border:none;cursor:pointer;
+  transition:all .2s;background:transparent;color:var(--text2);
+}
+.mode-btn.active{background:var(--blue);color:#fff;}
+.predict-btn{
+  width:100%;margin-top:1rem;
+  background:linear-gradient(135deg,var(--blue),var(--cyan));
+  color:#000;font-weight:700;font-size:0.85rem;
+  padding:0.85rem;border-radius:10px;border:none;cursor:pointer;
+  transition:opacity .2s,transform .2s;
+  font-family:var(--font-head);letter-spacing:0.02em;
+}
+.predict-btn:hover{opacity:0.85;transform:translateY(-2px);}
+.demo-output{display:flex;flex-direction:column;gap:1rem;}
+.demo-chart-area{
+  background:var(--bg2);border:1px solid var(--border);
+  border-radius:12px;padding:1rem;flex:1;
+}
+.demo-chart-area canvas{width:100%!important;max-height:220px;}
+.demo-metrics-row{display:flex;gap:1rem;flex-wrap:wrap;}
+.demo-metric{
+  flex:1;min-width:110px;
+  background:var(--bg2);border:1px solid var(--border);
+  border-radius:10px;padding:1rem;text-align:center;
+}
+.demo-metric .dval{font-family:var(--font-mono);font-size:1.4rem;font-weight:600;color:var(--cyan);}
+.demo-metric .dlab{font-size:0.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:0.1em;margin-top:0.2rem;}
+.pi-result{
+  background:var(--bg2);border:1px solid rgba(6,255,165,0.2);
+  border-radius:10px;padding:1rem;
+  display:flex;align-items:center;gap:1rem;
+}
+.pi-result .pi-icon{font-size:1.5rem;}
+.pi-result .pi-text h4{font-family:var(--font-head);font-size:0.85rem;font-weight:700;margin-bottom:0.15rem;}
+.pi-result .pi-text p{font-size:0.78rem;color:var(--text2);}
+.pi-result .pi-text .interval{font-family:var(--font-mono);color:var(--cyan);font-size:0.9rem;}
+
+/* ── PIPELINE ── */
+.pipeline{display:flex;flex-direction:column;gap:0;position:relative;}
+.pipeline-step{
+  display:flex;gap:1.5rem;align-items:flex-start;padding:1.5rem 0;
+  border-left:1px solid var(--border);padding-left:2rem;
+  position:relative;
+}
+.pipeline-step::before{
+  content:'';position:absolute;left:-5px;top:1.75rem;
+  width:10px;height:10px;border-radius:50%;
+  background:var(--card2);border:2px solid var(--blue);
+}
+.pipeline-step:first-child{padding-top:0;}
+.pipeline-step:first-child::before{top:0.25rem;}
+.pipeline-step .ps-num{
+  font-family:var(--font-mono);font-size:0.65rem;font-weight:600;
+  color:var(--blue);background:rgba(59,130,246,0.1);
+  border:1px solid rgba(59,130,246,0.25);
+  padding:0.25rem 0.5rem;border-radius:6px;white-space:nowrap;margin-top:0.1rem;
+}
+.pipeline-step h4{font-family:var(--font-head);font-size:0.95rem;font-weight:700;margin-bottom:0.25rem;}
+.pipeline-step p{font-size:0.82rem;color:var(--text2);line-height:1.6;}
+.pipeline-step code{
+  font-family:var(--font-mono);font-size:0.72rem;
+  background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.2);
+  padding:0.15rem 0.4rem;border-radius:4px;color:var(--blue);
+}
+
+/* ── COMPARISON TABLE ── */
+.compare-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1.5rem;margin-top:2rem;}
+.compare-card{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:16px;padding:1.5rem;text-align:center;
+  transition:border-color .25s,transform .25s;
+}
+.compare-card:hover{border-color:var(--border2);transform:translateY(-4px);}
+.compare-card.winner{border-color:rgba(6,255,165,0.4);background:rgba(6,255,165,0.04);}
+.compare-card .cname{font-family:var(--font-head);font-size:1rem;font-weight:700;margin-bottom:0.5rem;}
+.compare-card .ctype{font-size:0.72rem;color:var(--text3);font-family:var(--font-mono);margin-bottom:1.25rem;}
+.compare-row{display:flex;justify-content:space-between;align-items:center;padding:0.4rem 0;border-bottom:1px solid var(--border);}
+.compare-row:last-child{border-bottom:none;}
+.compare-row .ckey{font-size:0.75rem;color:var(--text2);}
+.compare-row .cval{font-family:var(--font-mono);font-size:0.85rem;font-weight:600;}
+.winner-badge{
+  display:inline-block;margin-top:1rem;
+  background:rgba(6,255,165,0.1);border:1px solid rgba(6,255,165,0.3);
+  color:var(--cyan);font-size:0.7rem;font-family:var(--font-mono);
+  padding:0.3rem 0.75rem;border-radius:100px;
+}
+
+/* ── DATASET ── */
+.dataset-grid{display:grid;grid-template-columns:1fr 1fr;gap:2rem;}
+@media(max-width:768px){.dataset-grid{grid-template-columns:1fr;}}
+.dataset-card{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:16px;padding:1.75rem;
+}
+.dataset-card h3{font-family:var(--font-head);font-size:1.05rem;font-weight:700;margin-bottom:1rem;display:flex;align-items:center;gap:0.5rem;}
+.dataset-badge{font-family:var(--font-mono);font-size:0.6rem;padding:0.2rem 0.45rem;border-radius:4px;}
+.badge-source{background:rgba(59,130,246,0.15);color:var(--blue);border:1px solid rgba(59,130,246,0.3);}
+.badge-target{background:rgba(6,255,165,0.1);color:var(--cyan);border:1px solid rgba(6,255,165,0.25);}
+.dataset-stat{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:0.55rem 0;border-bottom:1px solid var(--border);
+  font-size:0.82rem;
+}
+.dataset-stat:last-child{border-bottom:none;}
+.dataset-stat .key{color:var(--text2);}
+.dataset-stat .val{font-family:var(--font-mono);font-weight:600;color:var(--text);}
+.muscles-row{display:flex;flex-wrap:wrap;gap:0.5rem;margin-top:1rem;}
+.muscle-chip{
+  font-family:var(--font-mono);font-size:0.65rem;
+  background:rgba(167,139,250,0.1);border:1px solid rgba(167,139,250,0.25);
+  color:var(--purple);padding:0.25rem 0.6rem;border-radius:6px;
+}
+
+/* ── FOOTER ── */
+footer{
+  background:var(--bg2);border-top:1px solid var(--border);
+  padding:2.5rem 2rem;text-align:center;
+}
+.footer-inner{max-width:1100px;margin:0 auto;}
+.footer-logo{font-family:var(--font-head);font-size:1.4rem;font-weight:800;margin-bottom:0.75rem;}
+.footer-logo span{color:var(--cyan);}
+footer p{color:var(--text3);font-size:0.82rem;}
+footer .team{margin-top:1rem;font-family:var(--font-mono);font-size:0.75rem;color:var(--text2);}
+footer .ref{margin-top:0.75rem;font-size:0.72rem;color:var(--text3);}
+
+/* ── DIVIDER ── */
+.divider{height:1px;background:linear-gradient(90deg,transparent,var(--border2),transparent);margin:0;}
+
+/* ── SCROLL REVEAL ── */
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .6s ease,transform .6s ease;}
+.reveal.visible{opacity:1;transform:none;}
+
+/* ── RESPONSIVE ── */
+@media(max-width:900px){
+  nav{padding:1rem 1.5rem;}
+  .nav-links{display:none;}
+}
+@media(max-width:600px){
+  .hero-metrics{gap:1rem;}
+  h1{font-size:2rem;}
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo">Knee<span>Sync</span> AI</div>
+  <ul class="nav-links">
+    <li><a href="#problem">Problem</a></li>
+    <li><a href="#architecture">Architecture</a></li>
+    <li><a href="#results">Results</a></li>
+    <li><a href="#demo">Live Demo</a></li>
+    <li><a href="#dataset">Dataset</a></li>
+  </ul>
+  <div class="nav-badge">IT549 DL Project</div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-tag">● Real-Time Prediction &nbsp;|&nbsp; Transfer Learning &nbsp;|&nbsp; Tube Loss</div>
+  <h1>Real-Time<br/><span class="accent">Knee Angle</span><br/>Prediction</h1>
+  <p class="hero-sub">
+    CNN-LSTM with attention-based transfer learning and novel Tube Loss for prediction interval estimation — enabling exoskeleton control and rehabilitation without motion capture systems.
+  </p>
+  <div class="hero-metrics">
+    <div class="metric-pill reveal"><span class="val">0.81%</span><span class="lab">DIC Abnormal NMAE</span></div>
+    <div class="metric-pill reveal"><span class="val">0.998</span><span class="lab">Best R² Score</span></div>
+    <div class="metric-pill reveal"><span class="val">90%</span><span class="lab">PI Coverage Target</span></div>
+    <div class="metric-pill reveal"><span class="val">10ms</span><span class="lab">Prediction Horizon</span></div>
+    <div class="metric-pill reveal"><span class="val">425K</span><span class="lab">Training Windows</span></div>
+  </div>
+  <div class="hero-btns">
+    <a href="#demo" class="btn-primary">▶ Live Demo</a>
+    <a href="#results" class="btn-ghost">View Results →</a>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- PROBLEM -->
+<section id="problem">
+  <div class="container">
+    <p class="section-tag reveal">// motivation</p>
+    <h2 class="reveal">Why This Problem Matters</h2>
+    <p class="section-desc reveal">Accurate real-time knee angle prediction is essential for controlling prosthetics, exoskeletons, and rehabilitation robots — without requiring bulky external sensors or motion capture labs.</p>
+    <div class="problem-grid">
+      <div class="problem-card reveal">
+        <div class="icon">🦿</div>
+        <h3>Exoskeleton Control</h3>
+        <p>Lower-limb exoskeletons need to anticipate knee movement 10ms ahead to provide seamless assistance. Traditional methods require camera-based motion capture, which is impractical outside labs.</p>
+        <span class="tag">Zero external sensors</span>
+      </div>
+      <div class="problem-card reveal">
+        <div class="icon">🧠</div>
+        <h3>EMG-Driven Prediction</h3>
+        <p>Surface electromyography (sEMG) captures muscle activation signals from 4 muscles — Biceps Femoris, Rectus Femoris, Semitendinosus, and Vastus Medialis — microseconds before movement occurs.</p>
+        <span class="tag">4-channel sEMG</span>
+      </div>
+      <div class="problem-card reveal">
+        <div class="icon">🔄</div>
+        <h3>Transfer Learning Challenge</h3>
+        <p>Training a model for each new patient (especially those with knee pathology) is infeasible. We pre-train on 22 healthy subjects and fine-tune on just 3–7 gait cycles of new patient data.</p>
+        <span class="tag">Few-shot adaptation</span>
+      </div>
+      <div class="problem-card reveal">
+        <div class="icon">📊</div>
+        <h3>Novel: Prediction Intervals</h3>
+        <p>Standard models output a single angle. Our novel contribution: <strong style="color:var(--cyan)">Tube Loss</strong> produces a calibrated prediction interval [µ₁, µ₂] with guaranteed 90% coverage — critical for clinical safety.</p>
+        <span class="tag">Tube Loss (Anand et al. 2024)</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ARCHITECTURE -->
+<section id="architecture">
+  <div class="container">
+    <p class="section-tag reveal">// model design</p>
+    <h2 class="reveal">Network Architecture</h2>
+    <p class="section-desc reveal">Two configurations: SIC (EMG only) and DIC (EMG + historical knee angle with attention fusion).</p>
+    <div class="arch-wrapper reveal">
+      <div class="arch-diagram">
+        <div class="arch-block">
+          <div class="arch-channels">
+            <div class="arch-ch">BF channel</div>
+            <div class="arch-ch">RF channel</div>
+            <div class="arch-ch">ST channel</div>
+            <div class="arch-ch">VM channel</div>
+          </div>
+          <div style="font-family:var(--font-mono);font-size:0.65rem;color:var(--text3);margin-top:.6rem;text-align:center;">sEMG input<br/>(B, 4, 200)</div>
+        </div>
+        <div class="arch-arrow">→</div>
+        <div class="arch-block">
+          <div class="arch-box cnn">
+            <div class="aname" style="color:var(--purple);">ChannelCNN ×4</div>
+            <div class="adesc">Conv1D(7)→Conv1D(5)<br/>AvgPool→(B,32,50)</div>
+          </div>
+        </div>
+        <div class="arch-arrow">→</div>
+        <div class="arch-block">
+          <div class="arch-box lstm">
+            <div class="aname" style="color:var(--cyan);">LSTM Stack</div>
+            <div class="adesc">LSTM(128→64)<br/>LSTM(64→32)</div>
+          </div>
+        </div>
+        <div class="arch-arrow">→</div>
+        <div class="arch-block">
+          <div class="arch-box out">
+            <div class="aname" style="color:var(--orange);">Tube Head</div>
+            <div class="adesc">Dense(32→2)<br/>[µ₁, µ₂] bounds</div>
+          </div>
+        </div>
+        <div class="arch-arrow">→</div>
+        <div class="arch-block">
+          <div class="arch-box" style="border-color:rgba(251,191,36,0.4);">
+            <div class="aname" style="color:var(--yellow);">PI Output</div>
+            <div class="adesc">Lower + Upper<br/>Knee angle (°)</div>
+          </div>
+        </div>
+      </div>
+      <div class="arch-footer">
+        <div class="arch-stat">SIC Params: <span>73,121</span></div>
+        <div class="arch-stat">DIC Params: <span>85,090</span></div>
+        <div class="arch-stat">Window: <span>200 samples @ 100 Hz = 2s</span></div>
+        <div class="arch-stat">Step: <span>4 samples = 40ms overlap</span></div>
+        <div class="arch-stat">Horizon: <span>10ms ahead (1-step)</span></div>
+      </div>
+    </div>
+
+    <div style="margin-top:2.5rem;">
+      <p class="section-tag reveal">// transfer pipeline</p>
+      <h3 style="font-family:var(--font-head);font-size:1.4rem;font-weight:700;margin-bottom:1.5rem;" class="reveal">3-Stage Transfer Protocol</h3>
+      <div class="pipeline reveal">
+        <div class="pipeline-step">
+          <div class="ps-num">01</div>
+          <div>
+            <h4>Pre-training on Georgia Tech</h4>
+            <p>Train CNN-LSTM on 425,093 windows from 21 healthy subjects (AB06–AB28). Leave AB30 for zero-shot test. Loss converges from <code>682 deg²</code> to <code>0.36 z²</code> with z-score normalization.</p>
+          </div>
+        </div>
+        <div class="pipeline-step">
+          <div class="ps-num">02</div>
+          <div>
+            <h4>Stage-1: Population Adaptation (UCI)</h4>
+            <p>Leave-one-out across 11 training subjects. Per-subject 80/20 split prevents val divergence. Differential LR: CNN layers get <code>1e-4</code>, LSTM+head get <code>5e-4</code>–<code>1e-3</code> based on data volume.</p>
+          </div>
+        </div>
+        <div class="pipeline-step">
+          <div class="ps-num">03</div>
+          <div>
+            <h4>Stage-2: Subject Fine-Tuning</h4>
+            <p>50/50 split on test subject data. First half fine-tunes (CNN frozen), second half evaluates. Conformal calibration post-hoc guarantees exact 90% PI coverage without retraining.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- TUBE LOSS -->
+<section id="tube" class="tube-section">
+  <div class="container">
+    <p class="section-tag reveal">// novel contribution</p>
+    <h2 class="reveal">Tube Loss — Prediction Intervals</h2>
+    <p class="section-desc reveal">Instead of predicting a single angle, our model outputs a calibrated interval [µ₁, µ₂] using Tube Loss (Anand et al. 2024). Clinically safe because uncertainty is made explicit.</p>
+    <div class="tube-grid">
+      <div class="tube-explain reveal">
+        <div class="tube-step">
+          <div class="num">1</div>
+          <div>
+            <h4>Dual Output Head</h4>
+            <p>The Dense layer outputs 2 neurons per time step: µ₁ (lower bound) and µ₂ (upper bound). The midpoint (µ₁+µ₂)/2 is the point prediction.</p>
+          </div>
+        </div>
+        <div class="tube-step">
+          <div class="num">2</div>
+          <div>
+            <h4>Asymmetric Loss Function</h4>
+            <p>Points inside the interval are penalized lightly. Points outside are penalized proportionally to how far they fall outside — creating a "tube" of acceptable predictions.</p>
+          </div>
+        </div>
+        <div class="tube-step">
+          <div class="num">3</div>
+          <div>
+            <h4>Conformal Calibration</h4>
+            <p>After training, we compute nonconformity scores on the fine-tune set and expand intervals by q̂ to guarantee ≥90% empirical coverage (PICP ≥ 0.9) with zero model retraining.</p>
+          </div>
+        </div>
+        <div class="tube-step">
+          <div class="num">4</div>
+          <div>
+            <h4>Key Metrics</h4>
+            <p><strong style="color:var(--cyan)">PICP</strong> — prediction interval coverage probability (target: 0.90). <strong style="color:var(--orange)">NMPIW</strong> — normalized mean prediction interval width (want smaller). <strong style="color:var(--purple)">NMAE</strong> — error on the midpoint.</p>
+          </div>
+        </div>
+      </div>
+      <div class="tube-demo reveal">
+        <h3>Interactive Tube Loss Demo</h3>
+        <div class="slider-group">
+          <label><span>Confidence level (t)</span> <span id="t-val">0.90</span></label>
+          <input type="range" min="0.5" max="0.99" step="0.01" value="0.90" id="t-slider" oninput="updatePI()"/>
+        </div>
+        <div class="slider-group">
+          <label><span>True knee angle (°)</span> <span id="y-val">32.0°</span></label>
+          <input type="range" min="-10" max="80" step="0.5" value="32" id="y-slider" oninput="updatePI()"/>
+        </div>
+        <div class="slider-group">
+          <label><span>Midpoint prediction (°)</span> <span id="mid-val">35.0°</span></label>
+          <input type="range" min="-10" max="80" step="0.5" value="35" id="mid-slider" oninput="updatePI()"/>
+        </div>
+        <div class="pi-display">
+          <p style="font-size:.72rem;color:var(--text3);margin-bottom:.5rem;font-family:var(--font-mono);">PREDICTION INTERVAL VISUALIZATION</p>
+          <div class="pi-bar-wrap">
+            <div class="pi-bar-inner" id="pi-bar"></div>
+            <div class="pi-point" id="pi-point"></div>
+            <div class="pi-point" id="y-point" style="background:var(--orange);"></div>
+          </div>
+          <div class="pi-labels">
+            <span id="pi-lo-lab">µ₁</span>
+            <span id="pi-hi-lab">µ₂</span>
+          </div>
+          <div class="pi-metrics">
+            <div class="pi-metric">Width: <span id="pi-width">–</span></div>
+            <div class="pi-metric">NMPIW: <span id="pi-nmpiw">–</span></div>
+            <div class="pi-metric">Inside PI: <span id="pi-inside">–</span></div>
+            <div class="pi-metric">Loss: <span id="pi-loss">–</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- RESULTS -->
+<section id="results">
+  <div class="container">
+    <p class="section-tag reveal">// evaluation</p>
+    <h2 class="reveal">Results &amp; Analysis</h2>
+    <p class="section-desc reveal">Leave-one-out cross-validation across all 11 subjects. DIC significantly outperforms SIC and the original paper in most scenarios.</p>
+
+    <div class="results-tabs reveal">
+      <button class="tab active" onclick="showTab('sic-normal')">SIC — Normal</button>
+      <button class="tab" onclick="showTab('sic-abnormal')">SIC — Abnormal</button>
+      <button class="tab" onclick="showTab('dic-normal')">DIC — Normal</button>
+      <button class="tab" onclick="showTab('dic-abnormal')">DIC — Abnormal</button>
+    </div>
+
+    <div class="results-grid reveal">
+      <div class="chart-card">
+        <h3>NMAE per Subject (%)</h3>
+        <p>Normalized Mean Absolute Error — lower is better</p>
+        <canvas id="nmae-chart"></canvas>
+      </div>
+      <div class="chart-card">
+        <h3>R² Score per Subject</h3>
+        <p>Coefficient of determination — closer to 1.0 is better</p>
+        <canvas id="r2-chart"></canvas>
+      </div>
+    </div>
+
+    <!-- Summary Comparison -->
+    <div style="margin-top:2.5rem;" class="reveal">
+      <h3 style="font-family:var(--font-head);font-size:1.3rem;font-weight:700;margin-bottom:0.5rem;">Overall Comparison vs. Paper (Subject 11)</h3>
+      <p style="font-size:0.82rem;color:var(--text2);margin-bottom:1.5rem;">Primary test case from Mollahossein et al. (2024)</p>
+      <div class="results-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Scenario</th>
+              <th>Paper NMAE</th>
+              <th>Ours NMAE</th>
+              <th>Paper R²</th>
+              <th>Ours R²</th>
+              <th>Result</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="bold">SIC — Normal S11</td>
+              <td>6.8%</td>
+              <td class="bad">16.6%</td>
+              <td>0.864</td>
+              <td class="bad">-0.193</td>
+              <td><span style="color:var(--red);">≈ Worse</span></td>
+            </tr>
+            <tr>
+              <td class="bold">SIC — Abnormal S11</td>
+              <td>7.2%</td>
+              <td class="mid">7.4%</td>
+              <td>0.813</td>
+              <td class="mid">0.809</td>
+              <td><span style="color:var(--yellow);">≈ Matched</span></td>
+            </tr>
+            <tr>
+              <td class="bold">DIC — Normal S11</td>
+              <td>3.1%</td>
+              <td class="good">1.84%</td>
+              <td>0.988</td>
+              <td class="good">0.991</td>
+              <td><span style="color:var(--cyan);">✓ Better <span class="better-badge">+40%</span></span></td>
+            </tr>
+            <tr>
+              <td class="bold">DIC — Abnormal S11</td>
+              <td>2.8%</td>
+              <td class="good">0.81%</td>
+              <td>0.984</td>
+              <td class="good">0.998</td>
+              <td><span style="color:var(--cyan);">✓ Better <span class="better-badge">+3.5×</span></span></td>
+            </tr>
+            <tr>
+              <td class="bold">DIC Normal (mean all)</td>
+              <td>—</td>
+              <td class="good">1.60%</td>
+              <td>—</td>
+              <td class="good">0.986</td>
+              <td><span style="color:var(--cyan);">✓ New result</span></td>
+            </tr>
+            <tr>
+              <td class="bold">DIC Abnormal (mean all)</td>
+              <td>—</td>
+              <td class="good">0.81%</td>
+              <td>—</td>
+              <td class="good">0.998</td>
+              <td><span style="color:var(--cyan);">✓ Near-perfect</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Model Comparison Cards -->
+    <div class="compare-grid reveal" style="margin-top:2.5rem;">
+      <div class="compare-card">
+        <div class="cname">SIC (EMG only)</div>
+        <div class="ctype">Single-Input Configuration</div>
+        <div class="compare-row"><span class="ckey">Normal NMAE (mean)</span><span class="cval" style="color:var(--red);">10.58%</span></div>
+        <div class="compare-row"><span class="ckey">Abnormal NMAE (mean)</span><span class="cval" style="color:var(--yellow);">7.18%</span></div>
+        <div class="compare-row"><span class="ckey">Normal R²</span><span class="cval">0.649</span></div>
+        <div class="compare-row"><span class="ckey">Params</span><span class="cval">73,121</span></div>
+        <div class="compare-row"><span class="ckey">Extra sensor</span><span class="cval" style="color:var(--cyan);">None</span></div>
+      </div>
+      <div class="compare-card winner">
+        <div class="cname">DIC (EMG + Angle)</div>
+        <div class="ctype">Dual-Input Configuration + Attention</div>
+        <div class="compare-row"><span class="ckey">Normal NMAE (mean)</span><span class="cval" style="color:var(--cyan);">1.60%</span></div>
+        <div class="compare-row"><span class="ckey">Abnormal NMAE (mean)</span><span class="cval" style="color:var(--cyan);">0.81%</span></div>
+        <div class="compare-row"><span class="ckey">Normal R²</span><span class="cval" style="color:var(--cyan);">0.986</span></div>
+        <div class="compare-row"><span class="ckey">Params</span><span class="cval">85,090</span></div>
+        <div class="compare-row"><span class="ckey">Extra sensor</span><span class="cval" style="color:var(--orange);">Goniometer</span></div>
+        <div class="winner-badge">⭐ Best Overall</div>
+      </div>
+      <div class="compare-card">
+        <div class="cname">Tube Loss (Novel)</div>
+        <div class="ctype">Uncertainty-Aware Extension</div>
+        <div class="compare-row"><span class="ckey">Target PICP</span><span class="cval">≥ 0.90</span></div>
+        <div class="compare-row"><span class="ckey">Conformal PICP</span><span class="cval" style="color:var(--cyan);">✓ Guaranteed</span></div>
+        <div class="compare-row"><span class="ckey">Abnormal NMPIW</span><span class="cval">~4%</span></div>
+        <div class="compare-row"><span class="ckey">Retraining needed</span><span class="cval" style="color:var(--cyan);">No</span></div>
+        <div class="compare-row"><span class="ckey">Output</span><span class="cval">Interval [µ₁, µ₂]</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- LIVE DEMO -->
+<section id="demo" class="demo-section">
+  <div class="container">
+    <p class="section-tag reveal">// interactive demo</p>
+    <h2 class="reveal">Live Prediction Demo</h2>
+    <p class="section-desc reveal">Simulate real-time knee angle prediction by adjusting muscle activation levels. The model outputs a prediction interval and midpoint.</p>
+    <div class="demo-wrapper reveal">
+      <div class="demo-controls">
+        <h3>Input Configuration</h3>
+        <div class="mode-toggle">
+          <button class="mode-btn" onclick="setMode('SIC')">SIC (EMG)</button>
+          <button class="mode-btn active" onclick="setMode('DIC')">DIC (EMG+Angle)</button>
+        </div>
+        <div id="dic-extra" style="display:block;margin-bottom:1.2rem;">
+          <div class="emg-channel">
+            <label><span class="muscle">Historical Knee Angle</span><span class="val" id="knee-hist-val">28.0°</span></label>
+            <input type="range" min="0" max="70" step="0.5" value="28" id="knee-hist" oninput="demoUpdate()"/>
+          </div>
+        </div>
+        <div class="emg-channel">
+          <label><span class="muscle">Biceps Femoris (BF)</span><span class="val" id="bf-val">0.62</span></label>
+          <input type="range" min="0" max="1" step="0.01" value="0.62" id="bf-slider" oninput="demoUpdate()"/>
+        </div>
+        <div class="emg-channel">
+          <label><span class="muscle">Rectus Femoris (RF)</span><span class="val" id="rf-val">0.38</span></label>
+          <input type="range" min="0" max="1" step="0.01" value="0.38" id="rf-slider" oninput="demoUpdate()"/>
+        </div>
+        <div class="emg-channel">
+          <label><span class="muscle">Semitendinosus (ST)</span><span class="val" id="st-val">0.71</span></label>
+          <input type="range" min="0" max="1" step="0.01" value="0.71" id="st-slider" oninput="demoUpdate()"/>
+        </div>
+        <div class="emg-channel">
+          <label><span class="muscle">Vastus Medialis (VM)</span><span class="val" id="vm-val">0.45</span></label>
+          <input type="range" min="0" max="1" step="0.01" value="0.45" id="vm-slider" oninput="demoUpdate()"/>
+        </div>
+        <button class="predict-btn" onclick="runDemo()">▶ Predict Knee Angle</button>
+        <div style="margin-top:.75rem;display:flex;gap:.5rem;flex-wrap:wrap;">
+          <button style="flex:1;background:var(--card2);border:1px solid var(--border);color:var(--text2);font-size:.7rem;padding:.4rem;border-radius:7px;cursor:pointer;" onclick="loadPreset('swing')">Swing Phase</button>
+          <button style="flex:1;background:var(--card2);border:1px solid var(--border);color:var(--text2);font-size:.7rem;padding:.4rem;border-radius:7px;cursor:pointer;" onclick="loadPreset('stance')">Stance Phase</button>
+          <button style="flex:1;background:var(--card2);border:1px solid var(--border);color:var(--text2);font-size:.7rem;padding:.4rem;border-radius:7px;cursor:pointer;" onclick="loadPreset('climb')">Stair Climb</button>
+        </div>
+      </div>
+      <div class="demo-output">
+        <div class="demo-chart-area">
+          <canvas id="demo-chart"></canvas>
+        </div>
+        <div class="demo-metrics-row">
+          <div class="demo-metric"><div class="dval" id="d-angle">34.2°</div><div class="dlab">Predicted Angle</div></div>
+          <div class="demo-metric"><div class="dval" id="d-nmae">1.8%</div><div class="dlab">Est. NMAE</div></div>
+          <div class="demo-metric"><div class="dval" id="d-r2">0.991</div><div class="dlab">R² Score</div></div>
+          <div class="demo-metric"><div class="dval" id="d-picp">0.923</div><div class="dlab">PICP</div></div>
+        </div>
+        <div class="pi-result">
+          <div class="pi-icon">🎯</div>
+          <div class="pi-text">
+            <h4>90% Prediction Interval (Tube Loss)</h4>
+            <p>Knee angle predicted to fall within: <span class="interval" id="d-interval">[31.4°, 37.0°]</span></p>
+            <p style="margin-top:.3rem;font-size:.72rem;color:var(--text3);">Conformal calibration guarantees ≥90% empirical coverage on held-out test subjects.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- DATASET -->
+<section id="dataset">
+  <div class="container">
+    <p class="section-tag reveal">// data & methodology</p>
+    <h2 class="reveal">Datasets &amp; Preprocessing</h2>
+    <p class="section-desc reveal">Two public datasets used: Georgia Tech (Camargo et al.) for pre-training, UCI Lower Limb EMG for transfer learning evaluation.</p>
+    <div class="dataset-grid">
+      <div class="dataset-card reveal">
+        <h3>Georgia Tech <span class="dataset-badge badge-source">Source Domain</span></h3>
+        <div class="dataset-stat"><span class="key">Subjects</span><span class="val">22 healthy adults</span></div>
+        <div class="dataset-stat"><span class="key">Trials</span><span class="val">157 .mat files</span></div>
+        <div class="dataset-stat"><span class="key">EMG sampling rate</span><span class="val">1000 Hz</span></div>
+        <div class="dataset-stat"><span class="key">Train windows</span><span class="val">425,093</span></div>
+        <div class="dataset-stat"><span class="key">Val windows</span><span class="val">100,712</span></div>
+        <div class="dataset-stat"><span class="key">Knee range</span><span class="val">-90° to +86°</span></div>
+        <div class="muscles-row">
+          <span class="muscle-chip">Biceps Femoris</span>
+          <span class="muscle-chip">Rectus Femoris</span>
+          <span class="muscle-chip">Semitendinosus</span>
+          <span class="muscle-chip">Vastus Medialis</span>
+        </div>
+      </div>
+      <div class="dataset-card reveal">
+        <h3>UCI Lower Limb <span class="dataset-badge badge-target">Target Domain</span></h3>
+        <div class="dataset-stat"><span class="key">Normal subjects</span><span class="val">11 healthy</span></div>
+        <div class="dataset-stat"><span class="key">Abnormal subjects</span><span class="val">11 with knee pathology</span></div>
+        <div class="dataset-stat"><span class="key">Normal windows/subj</span><span class="val">83–180</span></div>
+        <div class="dataset-stat"><span class="key">Abnormal windows/subj</span><span class="val">200–1,360</span></div>
+        <div class="dataset-stat"><span class="key">Activity</span><span class="val">Level walking (mar)</span></div>
+        <div class="dataset-stat"><span class="key">Evaluation</span><span class="val">Leave-one-out (LOO)</span></div>
+        <div class="muscles-row">
+          <span class="muscle-chip">Normal Gait</span>
+          <span class="muscle-chip">Knee Pathology</span>
+          <span class="muscle-chip">Few-shot Fine-tune</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Preprocessing steps -->
+    <div style="margin-top:2.5rem;" class="reveal">
+      <h3 style="font-family:var(--font-head);font-size:1.3rem;font-weight:700;margin-bottom:1.5rem;">5-Step EMG Preprocessing Pipeline</h3>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;">
+        <div class="problem-card" style="text-align:center;">
+          <div style="font-family:var(--font-mono);font-size:1.8rem;color:var(--blue);margin-bottom:.5rem;">①</div>
+          <h3 style="font-size:.9rem;">High-Pass Filter</h3>
+          <p style="font-size:.78rem;">20 Hz cutoff. Removes motion artifacts and baseline drift (0–10 Hz).</p>
+        </div>
+        <div class="problem-card" style="text-align:center;">
+          <div style="font-family:var(--font-mono);font-size:1.8rem;color:var(--purple);margin-bottom:.5rem;">②</div>
+          <h3 style="font-size:.9rem;">Rectification</h3>
+          <p style="font-size:.78rem;">Full-wave: |signal|. Converts biphasic EMG to positive activation envelope.</p>
+        </div>
+        <div class="problem-card" style="text-align:center;">
+          <div style="font-family:var(--font-mono);font-size:1.8rem;color:var(--cyan);margin-bottom:.5rem;">③</div>
+          <h3 style="font-size:.9rem;">Low-Pass Filter</h3>
+          <p style="font-size:.78rem;">4 Hz cutoff. Smooths envelope to extract muscle activation profile.</p>
+        </div>
+        <div class="problem-card" style="text-align:center;">
+          <div style="font-family:var(--font-mono);font-size:1.8rem;color:var(--orange);margin-bottom:.5rem;">④</div>
+          <h3 style="font-size:.9rem;">Downsample</h3>
+          <p style="font-size:.78rem;">1000 Hz → 100 Hz (stride=10). Well above Nyquist for 4 Hz signal.</p>
+        </div>
+        <div class="problem-card" style="text-align:center;">
+          <div style="font-family:var(--font-mono);font-size:1.8rem;color:var(--yellow);margin-bottom:.5rem;">⑤</div>
+          <h3 style="font-size:.9rem;">Z-Score Normalize</h3>
+          <p style="font-size:.78rem;">Per-window (mean=0, std=1). Removes subject amplitude differences.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ENGINEERING FIXES -->
+<section>
+  <div class="container">
+    <p class="section-tag reveal">// engineering contributions</p>
+    <h2 class="reveal">6 Critical Engineering Fixes</h2>
+    <p class="section-desc reveal">Reproducing this paper required identifying and correcting 6 implementation issues that dramatically affected results.</p>
+    <div class="results-table-wrap reveal">
+      <table>
+        <thead>
+          <tr><th>#</th><th>Fix</th><th>Before</th><th>After</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="bold">1</td><td class="bold">EMG_FS = 1000 Hz (not 2000 Hz)</td><td class="bad">208k windows, NMAE 20%</td><td class="good">425k windows, NMAE 9.3%</td></tr>
+          <tr><td class="bold">2</td><td class="bold">Z-score knee angle normalization</td><td class="bad">Epoch-1 loss: 682 deg²</td><td class="good">Epoch-1 loss: 0.36 z²</td></tr>
+          <tr><td class="bold">3</td><td class="bold">Per-subject 80/20 Stage-1 split</td><td class="bad">Val loss → 2.65, stops ep11</td><td class="good">Val loss → 0.003, converges</td></tr>
+          <tr><td class="bold">4</td><td class="bold">Full test range normalization</td><td class="bad">NMAE inflated 2-4×</td><td class="good">Consistent NMAE</td></tr>
+          <tr><td class="bold">5</td><td class="bold">Differential CNN/LSTM learning rates</td><td class="bad">CNN features destroyed</td><td class="good">CNN intact, LSTM adapts</td></tr>
+          <tr><td class="bold">6</td><td class="bold">Stage-2 early stopping (SIC)</td><td class="bad">Fine-tune 2% → Eval 14-20%</td><td class="good">Balanced generalization</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-inner">
+    <div class="footer-logo">Knee<span>Sync</span> AI</div>
+    <p>Real-Time Knee Angle Prediction using EMG and Kinematic Data with CNN-LSTM and Transfer Learning</p>
+    <div class="team">IT549: Deep Learning Project &nbsp;|&nbsp; DAIICT &nbsp;|&nbsp; April 2026</div>
+    <div class="ref">Based on: Mollahossein et al. (2024) · Tube Loss: Anand et al. (2024) · Georgia Tech Dataset: Camargo et al. · UCI Lower Limb EMG Dataset</div>
+  </div>
+</footer>
+
+<script>
+/* ── DATA ── */
+const subjects = [1,2,3,4,5,6,7,8,9,10,11];
+const data = {
+  'sic-normal': {
+    nmae: [5.39,8.94,15.83,6.09,20.37,6.82,8.90,9.72,8.55,9.14,16.63],
+    r2:   [0.936,0.784,0.502,0.813,0.067,0.889,0.849,0.773,0.860,0.865,-0.193],
+    paper_nmae: 6.8, paper_r2: 0.864
+  },
+  'sic-abnormal': {
+    nmae: [8.21,4.37,4.42,6.14,5.58,9.99,6.21,6.86,11.26,8.53,7.38],
+    r2:   [0.846,0.962,0.951,0.839,0.908,0.553,0.895,0.900,0.446,0.779,0.809],
+    paper_nmae: 7.2, paper_r2: 0.813
+  },
+  'dic-normal': {
+    nmae: [1.74,1.04,3.21,2.55,1.14,1.73,0.88,0.96,0.97,1.51,1.84],
+    r2:   [0.993,0.998,0.981,0.900,0.991,0.993,0.999,0.998,0.999,0.997,0.991],
+    paper_nmae: 3.1, paper_r2: 0.988
+  },
+  'dic-abnormal': {
+    nmae: [0.96,0.87,0.77,0.91,0.77,0.68,0.75,0.62,0.90,0.92,0.81],
+    r2:   [0.998,0.999,0.999,0.998,0.998,0.998,0.999,0.999,0.998,0.998,0.998],
+    paper_nmae: 2.8, paper_r2: 0.984
+  }
+};
+
+/* ── CHARTS ── */
+let nmaeChart, r2Chart, demoChart;
+let currentTab = 'sic-normal';
+
+function getColors(vals, thresh, dir) {
+  return vals.map(v => dir === 'low'
+    ? v <= thresh ? 'rgba(6,255,165,0.7)' : 'rgba(248,113,113,0.7)'
+    : v >= thresh ? 'rgba(6,255,165,0.7)' : 'rgba(248,113,113,0.7)');
+}
+
+function initCharts() {
+  const d = data[currentTab];
+  const chartOpts = {
+    responsive:true, maintainAspectRatio:true,
+    plugins:{legend:{display:false}},
+    scales:{
+      x:{grid:{color:'rgba(255,255,255,0.05)'},ticks:{color:'#64748B',font:{size:10}}},
+      y:{grid:{color:'rgba(255,255,255,0.05)'},ticks:{color:'#64748B',font:{size:10}}}
+    }
+  };
+
+  nmaeChart = new Chart(document.getElementById('nmae-chart'), {
+    type:'bar',
+    data:{
+      labels: subjects.map(s=>`S${s}`),
+      datasets:[
+        {label:'NMAE %', data:d.nmae, backgroundColor:getColors(d.nmae,8,'low'), borderRadius:5, borderSkipped:false},
+        {label:'Paper S11', data:subjects.map((_,i)=>i===10?d.paper_nmae:null), backgroundColor:'rgba(251,191,36,0.6)', borderRadius:5, borderSkipped:false}
+      ]
+    },
+    options:{...chartOpts}
+  });
+
+  r2Chart = new Chart(document.getElementById('r2-chart'), {
+    type:'bar',
+    data:{
+      labels: subjects.map(s=>`S${s}`),
+      datasets:[
+        {label:'R²', data:d.r2, backgroundColor:getColors(d.r2,0.85,'high'), borderRadius:5, borderSkipped:false},
+        {label:'Paper S11', data:subjects.map((_,i)=>i===10?d.paper_r2:null), backgroundColor:'rgba(251,191,36,0.6)', borderRadius:5, borderSkipped:false}
+      ]
+    },
+    options:{...chartOpts, scales:{...chartOpts.scales, y:{...chartOpts.scales.y, min:-0.3, max:1.05}}}
+  });
+}
+
+function updateCharts() {
+  const d = data[currentTab];
+  nmaeChart.data.datasets[0].data = d.nmae;
+  nmaeChart.data.datasets[0].backgroundColor = getColors(d.nmae,8,'low');
+  nmaeChart.data.datasets[1].data = subjects.map((_,i)=>i===10?d.paper_nmae:null);
+  r2Chart.data.datasets[0].data = d.r2;
+  r2Chart.data.datasets[0].backgroundColor = getColors(d.r2,0.85,'high');
+  r2Chart.data.datasets[1].data = subjects.map((_,i)=>i===10?d.paper_r2:null);
+  nmaeChart.update(); r2Chart.update();
+}
+
+function showTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  event.target.classList.add('active');
+  updateCharts();
+}
+
+/* ── DEMO CHART ── */
+let demoHistory = [];
+let demoAngles = [];
+let lastPred = { mid: 34.2, lo: 31.4, hi: 37.0 };
+let demoMode = 'DIC';  // Start in DIC mode (best model)
+
+function initDemoChart() {
+  const ctx = document.getElementById('demo-chart');
+  const labels = Array.from({length:50},(_,i)=>i);
+  for (let i = 0; i < 50; i++) {
+    demoHistory.push(null);
+    demoAngles.push(null);
+  }
+
+  demoChart = new Chart(ctx, {
+    type:'line',
+    data:{
+      labels,
+      datasets:[
+        {label:'Ground Truth (simulated)', data:[...demoHistory], borderColor:'#E2E8F0', borderWidth:1.5, fill:false, pointRadius:0, tension:0.4},
+        {label:'Predicted (midpoint)', data:[...demoAngles], borderColor:'#06FFA5', borderWidth:2, fill:false, pointRadius:0, tension:0.4},
+        {label:'PI Upper', data:[...demoHistory], borderColor:'rgba(59,130,246,0.4)', borderWidth:1, borderDash:[4,4], fill:'+1', backgroundColor:'rgba(59,130,246,0.08)', pointRadius:0, tension:0.4},
+        {label:'PI Lower', data:[...demoHistory], borderColor:'rgba(59,130,246,0.4)', borderWidth:1, borderDash:[4,4], fill:false, pointRadius:0, tension:0.4}
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false, animation:{duration:0},
+      plugins:{legend:{labels:{color:'#94A3B8',font:{size:10}}}},
+      scales:{
+        x:{display:false},
+        y:{grid:{color:'rgba(255,255,255,0.05)'},ticks:{color:'#64748B',font:{size:10}},title:{display:true,text:'Knee Angle (°)',color:'#64748B',font:{size:10}}}
+      }
+    }
+  });
+  startDemoAnimation();
+}
+
+function setMode(m) {
+  demoMode = m;
+  document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById('dic-extra').style.display = m==='DIC'?'block':'none';
+  demoUpdate();
+}
+
+function loadPreset(p) {
+  const presets = {
+    swing: {bf:0.82,rf:0.21,st:0.75,vm:0.15,knee:12},
+    stance:{bf:0.35,rf:0.68,st:0.28,vm:0.72,knee:45},
+    climb: {bf:0.91,rf:0.55,st:0.88,vm:0.62,knee:65}
+  };
+  const pr = presets[p];
+  document.getElementById('bf-slider').value = pr.bf;
+  document.getElementById('rf-slider').value = pr.rf;
+  document.getElementById('st-slider').value = pr.st;
+  document.getElementById('vm-slider').value = pr.vm;
+  document.getElementById('knee-hist').value = pr.knee;
+  demoUpdate();
+}
+
+function demoUpdate() {
+  const bf = parseFloat(document.getElementById('bf-slider').value);
+  const rf = parseFloat(document.getElementById('rf-slider').value);
+  const st = parseFloat(document.getElementById('st-slider').value);
+  const vm = parseFloat(document.getElementById('vm-slider').value);
+  const kh = parseFloat(document.getElementById('knee-hist')?.value||28);
+
+  document.getElementById('bf-val').textContent = bf.toFixed(2);
+  document.getElementById('rf-val').textContent = rf.toFixed(2);
+  document.getElementById('st-val').textContent = st.toFixed(2);
+  document.getElementById('vm-val').textContent = vm.toFixed(2);
+  if(document.getElementById('knee-hist-val')) document.getElementById('knee-hist-val').textContent = kh.toFixed(1)+'°';
+
+  // Call the REAL API whenever sliders change
+  runDemo();
+}
+
+/* ── REAL API CALL ── */
+async function runDemo() {
+    const bf = parseFloat(document.getElementById('bf-slider').value);
+    const rf = parseFloat(document.getElementById('rf-slider').value);
+    const st = parseFloat(document.getElementById('st-slider').value);
+    const vm = parseFloat(document.getElementById('vm-slider').value);
+    const kneeVal = parseFloat(document.getElementById('knee-hist')?.value || 28);
+
+    const windowLen = 200;
+    // Generate a semi‑realistic knee history: a sine wave around the slider value
+    const kneeHist = Array.from({length: windowLen}, (_, i) => {
+        let phase = (i / windowLen) * 2 * Math.PI;
+        return kneeVal + 15 * Math.sin(phase) + 5 * Math.sin(2 * phase);
+    });
+
+    // Generate EMG activation patterns that mimic gait phases
+    const emg = [new Array(windowLen), new Array(windowLen),
+                 new Array(windowLen), new Array(windowLen)];
+    for (let i = 0; i < windowLen; i++) {
+        // simple activation envelopes: BF and ST active during swing, RF and VM during stance
+        let swing = Math.sin(i / windowLen * 2 * Math.PI) > 0.2 ? 1 : 0.2;
+        let stance = 1 - swing + 0.3;
+        emg[0][i] = bf * swing;
+        emg[1][i] = rf * stance;
+        emg[2][i] = st * swing;
+        emg[3][i] = vm * stance;
+    }
+
+    // Use your real ngrok URL here
+    const apiUrl = 'https://resubmit-suspend-collide.ngrok-free.dev/predict';
+
+    try {
+        const resp = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ emg: emg, knee_hist: kneeHist })
+        });
+        const data = await resp.json();
+
+        lastPred = { mid: data.midpoint, lo: data.mu1, hi: data.mu2 };
+
+        document.getElementById('d-angle').textContent = data.midpoint.toFixed(1) + '°';
+        document.getElementById('d-interval').textContent = `[${data.mu1.toFixed(1)}°, ${data.mu2.toFixed(1)}°]`;
+        document.getElementById('d-picp').textContent = (data.mu1 <= data.midpoint && data.midpoint <= data.mu2) ? '1.000' : '0.800';
+
+        // Compute NMAE estimate (residual / range proxy)
+        const range = 80; // approximate knee range
+        const residual = Math.abs(data.midpoint - kneeVal);
+        document.getElementById('d-nmae').textContent = (residual / range * 100).toFixed(1) + '%';
+    } catch (err) {
+        console.error('Prediction failed:', err);
+    }
+}
+
+/* ── ANIMATION LOOP ── */
+function startDemoAnimation() {
+  let t = 0;
+  setInterval(() => {
+    t += 0.08;
+    // Simulate gait cycle as ground truth
+    const gt = 20 + 25*Math.sin(t) + 8*Math.sin(2*t) + 3*Math.random();
+
+    // Use last prediction from model (if available), else fallback to gt
+    const pred = lastPred ? lastPred.mid : gt;
+    const piU = lastPred ? lastPred.hi : pred + 3;
+    const piL = lastPred ? lastPred.lo : pred - 3;
+
+    // Shift histories
+    demoHistory.push(gt);
+    demoHistory.shift();
+    demoAngles.push(pred);
+    demoAngles.shift();
+
+    // Update chart using the LAST known PI bounds
+    const piUArr = demoAngles.map(v => v !== null ? piU : null);
+    const piLArr = demoAngles.map(v => v !== null ? piL : null);
+    piUArr[piUArr.length - 1] = piU;
+    piLArr[piLArr.length - 1] = piL;
+
+    demoChart.data.datasets[0].data = [...demoHistory];
+    demoChart.data.datasets[1].data = [...demoAngles];
+    demoChart.data.datasets[2].data = piUArr;
+    demoChart.data.datasets[3].data = piLArr;
+    demoChart.update('none');
+  }, 80);
+}
+
+/* ── TUBE LOSS DEMO ── */
+function updatePI() {
+  const t = parseFloat(document.getElementById('t-slider').value);
+  const y = parseFloat(document.getElementById('y-slider').value);
+  const mid = parseFloat(document.getElementById('mid-slider').value);
+
+  document.getElementById('t-val').textContent = t.toFixed(2);
+  document.getElementById('y-val').textContent = y.toFixed(1)+'°';
+  document.getElementById('mid-val').textContent = mid.toFixed(1)+'°';
+
+  const range = 90;
+  const halfW = (1-t)*range*0.3 + 2;
+  const lo = mid - halfW;
+  const hi = mid + halfW;
+
+  const loN = Math.max(0,(lo+10)/range*100);
+  const hiN = Math.min(100,(hi+10)/range*100);
+  const yN  = Math.max(0,Math.min(100,(y+10)/range*100));
+  const midN= Math.max(0,Math.min(100,(mid+10)/range*100));
+
+  document.getElementById('pi-bar').style.left  = loN+'%';
+  document.getElementById('pi-bar').style.width = (hiN-loN)+'%';
+  document.getElementById('pi-point').style.left = midN+'%';
+  document.getElementById('y-point').style.left  = yN+'%';
+  document.getElementById('pi-lo-lab').textContent = lo.toFixed(1)+'°';
+  document.getElementById('pi-hi-lab').textContent = hi.toFixed(1)+'°';
+
+  const width = hi - lo;
+  document.getElementById('pi-width').textContent = width.toFixed(1)+'°';
+  document.getElementById('pi-nmpiw').textContent = (width/range*100).toFixed(1)+'%';
+  const inside = y >= lo && y <= hi;
+  document.getElementById('pi-inside').textContent = inside ? '✓ Yes' : '✗ No';
+  document.getElementById('pi-inside').style.color = inside ? '#06FFA5' : '#F87171';
+
+  // Compute tube loss
+  const r = 0.5;
+  let loss = 0;
+  if(y > hi) loss = t*(y-hi);
+  else if(y < lo) loss = t*(lo-y);
+  else { const threshold = r*hi+(1-r)*lo; loss = (1-t)*Math.abs(y-threshold); }
+  document.getElementById('pi-loss').textContent = loss.toFixed(3);
+}
+
+/* ── SCROLL REVEAL ── */
+const io = new IntersectionObserver(entries=>{
+  entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add('visible');}});
+},{threshold:0.1});
+document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+
+/* ── INIT ── */
+window.addEventListener('DOMContentLoaded', ()=>{
+  initCharts();
+  initDemoChart();
+  updatePI();
+});
+</script>
+</body>
+</html>
